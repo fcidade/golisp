@@ -25,8 +25,14 @@ func (t TokenType) String() string {
 		return "String"
 	case TokenTypeNumber:
 		return "Number"
+	case TokenTypeLParen:
+		return "LParen"
+	case TokenTypeRParen:
+		return "RParen"
+	case TokenTypeEOF:
+		return "EOF"
 	default:
-		return "Unknown"
+		panic(fmt.Sprintf("unexpected token type %d", t))
 	}
 }
 
@@ -34,6 +40,13 @@ const (
 	TokenTypeIdentifier = iota
 	TokenTypeString
 	TokenTypeNumber
+	TokenTypeLParen
+	TokenTypeRParen
+	TokenTypeEOF
+)
+
+var (
+	TokenEOF = Token{Literal: "EOF", TokenType: TokenTypeEOF, Value: io.EOF}
 )
 
 func tokenize(input string) ([]Token, error) {
@@ -42,11 +55,19 @@ func tokenize(input string) ([]Token, error) {
 
 	tokens := []Token{}
 
+	debug_amountOfPeeksOnTheSameChar := map[string]int{}
+	debug_maxAmountOfPeeksOnTheSameChar := 10
+
 	var peek = func() string {
+		c := string(input[cursor])
+		debug_amountOfPeeksOnTheSameChar[c]++
+		if debug_amountOfPeeksOnTheSameChar[c] > debug_maxAmountOfPeeksOnTheSameChar {
+			panic(fmt.Sprintf("peeked on the same char (%q) %d times", c, debug_amountOfPeeksOnTheSameChar[c]))
+		}
 		if cursor >= len(input) {
 			return ""
 		}
-		return string(input[cursor])
+		return c
 	}
 
 	var fetch = func() string {
@@ -71,17 +92,27 @@ func tokenize(input string) ([]Token, error) {
 			fetch()
 			for fetch() != `'` {
 			}
-			tokens = append(tokens, Token{Literal: input[start:cursor], TokenType: TokenTypeString})
+			tokens = append(tokens, Token{
+				Literal:   input[start:cursor],
+				Value:     input[start+1 : cursor-1],
+				TokenType: TokenTypeString,
+			})
 		case strings.Contains(AllowedIdentifierStartChars, currChar):
 			start = cursor
 			for strings.Contains(AllowedIdentifierChars, fetch()) {
 			}
-			tokens = append(tokens, Token{Literal: input[start:cursor], TokenType: TokenTypeIdentifier})
-		case slices.Contains([]string{" ", "(", ")"}, currChar):
+			tokens = append(tokens, Token{Literal: input[start : cursor-1], TokenType: TokenTypeIdentifier})
+		case currChar == `(`:
+			tokens = append(tokens, Token{Literal: currChar, TokenType: TokenTypeLParen})
+			fetch()
+		case currChar == `)`:
+			tokens = append(tokens, Token{Literal: currChar, TokenType: TokenTypeRParen})
+			fetch()
+		case slices.Contains([]string{" ", "\n"}, currChar):
 			fetch()
 		default:
 			// fetch()
-			panic(fmt.Sprintf("unexpected character %s", currChar))
+			panic(fmt.Sprintf("unexpected character %q", currChar))
 		}
 
 		// switch currChar {
@@ -89,39 +120,144 @@ func tokenize(input string) ([]Token, error) {
 		// case strings.Contains("", currChar):
 		// }
 	}
-	tokens = append(tokens, Token{Literal: "EOF", TokenType: TokenTypeIdentifier, Value: io.EOF})
+	tokens = append(tokens, TokenEOF)
 	return tokens, nil
 }
 
 // Parse
 
+func parse(tokens []Token) ([]Expression, error) {
+	expressions := []Expression{}
+
+	cursor := 0
+	debug_amountOfPeeksOnTheSameChar := map[Token]int{}
+	debug_maxAmountOfPeeksOnTheSameChar := 10
+
+	var peek = func() Token {
+		c := tokens[cursor]
+		debug_amountOfPeeksOnTheSameChar[c]++
+		if debug_amountOfPeeksOnTheSameChar[c] > debug_maxAmountOfPeeksOnTheSameChar {
+			panic(fmt.Sprintf("peeked on the same token (%q) %d times", c, debug_amountOfPeeksOnTheSameChar[c]))
+		}
+		if cursor >= len(tokens) {
+			return TokenEOF
+		}
+		return (tokens[cursor])
+	}
+
+	var fetch = func() Token {
+		t := peek()
+		cursor++
+		return t
+	}
+
+token_loop:
+	for cursor < len(tokens) {
+		currToken := peek()
+		switch currToken.TokenType {
+		case TokenTypeEOF:
+			break token_loop
+		case TokenTypeLParen:
+			fetch()
+		case TokenTypeString:
+			value, ok := currToken.Value.(string)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type %T", currToken.Value)
+			}
+			expressions = append(expressions, &StringExpr{Value: value})
+			fetch()
+		case TokenTypeIdentifier:
+			{
+				switch currToken.Literal {
+				case "println":
+					fetch()
+					expr := &Println{}
+					args := []Token{}
+					for peek().TokenType != TokenTypeRParen {
+						// expr.Args = append(expr.Args, peek())
+						args = append(args, peek())
+						// fmt.Println("ADDED: ", peek())
+						fetch()
+					}
+					parsed, err := parse(args)
+					if err != nil {
+						return nil, err
+					}
+					expr.Args = parsed
+					expressions = append(expressions, expr)
+					fetch()
+				default:
+					return nil, fmt.Errorf("unexpected identifier %q (%+v)", currToken.Literal, currToken)
+				}
+			}
+		default:
+			return nil, fmt.Errorf("unexpected token %v", currToken)
+		}
+	}
+
+	return expressions, nil
+}
+
 // Eval
 
 type Expression interface {
 	Eval() error
+	// String() string // TODO:
+}
+
+type StringExpr struct {
+	Value string
+}
+
+var _ Expression = &StringExpr{}
+
+func (e *StringExpr) Eval() error {
+	return nil
+}
+
+func (e *StringExpr) String() string {
+	return e.Value
 }
 
 type Println struct {
-	Message string
+	Args []Expression
 }
 
 var _ Expression = &Println{}
 
 func (e *Println) Eval() error {
-	fmt.Println(e.Message)
+	fmt.Print("OUTPUT: ")
+	argsAsStr := []string{}
+	for _, arg := range e.Args {
+		argsAsStr = append(argsAsStr, fmt.Sprintf("%s", arg))
+	}
+	fmt.Println(strings.Join(argsAsStr, " "))
 	return nil
 }
 
-func parse(tokens []Token) (Expression, error) {
-	return nil, nil
+func (e *Println) String() string {
+	argsAsStr := []string{}
+	for _, arg := range e.Args {
+		argsAsStr = append(argsAsStr, fmt.Sprintf("%q", arg))
+	}
+	return fmt.Sprintf("(println %s)", strings.Join(argsAsStr, " "))
 }
 
-func eval(e Expression) error {
+func eval(e []Expression) error {
 	if e == nil {
-		panic(fmt.Sprintf("unexpected type %T", e))
+		return fmt.Errorf("unexpected type %T", e)
 	}
-	return e.Eval()
+	for _, e := range e {
+		fmt.Printf("EVAL: % 16T %- 16s\n", e, e)
+		err := e.Eval()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
+
+// Main
 
 func main() {
 	program := "(println 'Hello, city!' 'What is your name?')"
@@ -129,14 +265,24 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println("=== Tokens ===")
 	for i, token := range tokens {
-		fmt.Printf("Token: % 16d | %- 16s  | %- 32s | %- 16v\n", i, token.TokenType, token.Literal, token.Value)
+		fmt.Printf("Token: % 4d | %- 16s  | %- 32s | %- 16v\n", i, token.TokenType, token.Literal, token.Value)
 	}
-	expression, err := parse(tokens)
+	fmt.Println("\n=== Expressions ===")
+	expressions, err := parse(tokens)
 	if err != nil {
 		panic(err)
 	}
-	eval(expression)
+	for i, expression := range expressions {
+		fmt.Printf("Expression: % 4d | %- 4T | %s\n", i, expression, expression)
+		// fmt.Printf("Expression: % 4d | %- 4T \n", i, expression)
+	}
+	fmt.Println("\n=== Eval ===")
+	err = eval(expressions)
+	if err != nil {
+		panic(err)
+	}
 }
 
 /*
@@ -146,3 +292,5 @@ Syntax:
 (pf "Hello, %s!" "city")
 (printf "Hello, %q!" "city")
 */
+
+// TODO: CLI baseado no codigo do aws-vault
