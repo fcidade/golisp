@@ -108,11 +108,11 @@ func tokenize(input string) ([]Token, error) {
 		case currChar == `)`:
 			tokens = append(tokens, Token{Literal: currChar, TokenType: TokenTypeRParen})
 			fetch()
-		case slices.Contains([]string{" ", "\n"}, currChar):
+		case slices.Contains([]string{" ", "\n", "\t"}, currChar):
 			fetch()
 		default:
 			// fetch()
-			panic(fmt.Sprintf("unexpected character %q", currChar))
+			return nil, (fmt.Errorf("unexpected character %q", currChar))
 		}
 
 		// switch currChar {
@@ -186,6 +186,23 @@ token_loop:
 					expr.Args = parsed
 					expressions = append(expressions, expr)
 					fetch()
+				case "printf":
+					fetch()
+					expr := &Printf{}
+					args := []Token{}
+					for peek().TokenType != TokenTypeRParen {
+						// expr.Args = append(expr.Args, peek())
+						args = append(args, peek())
+						// fmt.Println("ADDED: ", peek())
+						fetch()
+					}
+					parsed, err := parse(args)
+					if err != nil {
+						return nil, err
+					}
+					expr.Args = parsed
+					expressions = append(expressions, expr)
+					fetch()
 				default:
 					return nil, fmt.Errorf("unexpected identifier %q (%+v)", currToken.Literal, currToken)
 				}
@@ -243,6 +260,32 @@ func (e *Println) String() string {
 	return fmt.Sprintf("(println %s)", strings.Join(argsAsStr, " "))
 }
 
+type Printf struct {
+	Args []Expression
+}
+
+var _ Expression = &Printf{}
+
+func (e *Printf) Eval() error {
+	fmt.Print("OUTPUT: ")
+	args := []any{}
+	if len(e.Args) > 1 {
+		for _, arg := range e.Args[1:] {
+			args = append(args, arg)
+		}
+	}
+	fmt.Printf(fmt.Sprint(e.Args[0]), args...)
+	return nil
+}
+
+func (e *Printf) String() string {
+	argsAsStr := []string{}
+	for _, arg := range e.Args {
+		argsAsStr = append(argsAsStr, fmt.Sprintf("%q", arg))
+	}
+	return fmt.Sprintf("(printf %s)", strings.Join(argsAsStr, " "))
+}
+
 func eval(e []Expression) error {
 	if e == nil {
 		return fmt.Errorf("unexpected type %T", e)
@@ -260,7 +303,13 @@ func eval(e []Expression) error {
 // Main
 
 func main() {
-	program := "(println 'Hello, city!' 'What is your name?')"
+	// program := "(println 'Hello, city!' 'What is your name?')"
+	program := `
+	(println 'Hello, city!' 'What is your name?')
+	(println 'Hello, state!' 'What is your age?')
+	(println 'Hi!')
+	(printf 'Hi! %s!' 'Country')
+	`
 	tokens, err := tokenize(program)
 	if err != nil {
 		panic(err)
