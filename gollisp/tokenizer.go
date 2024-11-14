@@ -37,8 +37,8 @@ func Tokenize(input string) ([]Token, error) {
 	}
 
 	const (
-		AllowedIdentifierStartChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		AllowedIdentifierChars      = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+		AllowedIdentifierStartChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_+-*/"
+		AllowedIdentifierChars      = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_+-*/"
 	)
 
 	for cursor < len(input) {

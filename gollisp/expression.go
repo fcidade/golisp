@@ -35,6 +35,7 @@ type FnCall struct {
 
 var _ Expression = &FnCall{}
 
+// TODO: Be able to return an expression
 type Fn func(args []Expression) error
 
 var FnMap = map[string]Fn{
@@ -59,6 +60,19 @@ var FnMap = map[string]Fn{
 			}
 		}
 		fmt.Printf(fmt.Sprint(args[0]), argsAny...)
+		return nil
+	},
+	"+": func(args []Expression) error {
+		// if len(args) != 2 {
+		// 	return fmt.Errorf("expected 2 arguments, got %d", len(args))
+		// }
+		// switch arg1 := args[0].(type) {
+		// 	case *StringExpr:
+		// 		switch arg2 := args[1].(type) {
+		// 			case *StringExpr:
+		// 				args[0] = &StringExpr{Value: arg1.Value + arg2.Value}
+		// 				args[1] = nil
+		// }
 		return nil
 	},
 }
