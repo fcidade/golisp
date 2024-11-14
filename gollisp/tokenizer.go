@@ -68,14 +68,8 @@ func Tokenize(input string) ([]Token, error) {
 		case slices.Contains([]string{" ", "\n", "\t"}, currChar):
 			fetch()
 		default:
-			// fetch()
 			return nil, (fmt.Errorf("unexpected character %q", currChar))
 		}
-
-		// switch currChar {
-		// case '(':
-		// case strings.Contains("", currChar):
-		// }
 	}
 	tokens = append(tokens, TokenEOF)
 	return tokens, nil

@@ -43,47 +43,20 @@ token_loop:
 			expressions = append(expressions, &StringExpr{Value: value})
 			fetch()
 		case TokenTypeIdentifier:
-			{
-				switch currToken.Literal {
-				// TODO: create a fn mapper
-				case "println":
-					fetch()
-					expr := &Println{}
-					args := []Token{}
-					for peek().TokenType != TokenTypeRParen {
-						// expr.Args = append(expr.Args, peek())
-						args = append(args, peek())
-						// fmt.Println("ADDED: ", peek())
-						fetch()
-					}
-					parsed, err := Parse(args)
-					if err != nil {
-						return nil, err
-					}
-					expr.Args = parsed
-					expressions = append(expressions, expr)
-					fetch()
-				case "printf":
-					fetch()
-					expr := &Printf{}
-					args := []Token{}
-					for peek().TokenType != TokenTypeRParen {
-						// expr.Args = append(expr.Args, peek())
-						args = append(args, peek())
-						// fmt.Println("ADDED: ", peek())
-						fetch()
-					}
-					parsed, err := Parse(args)
-					if err != nil {
-						return nil, err
-					}
-					expr.Args = parsed
-					expressions = append(expressions, expr)
-					fetch()
-				default:
-					return nil, fmt.Errorf("unexpected identifier %q (%+v)", currToken.Literal, currToken)
-				}
+			fetch()
+			expr := &FnCall{Token: currToken}
+			args := []Token{}
+			for peek().TokenType != TokenTypeRParen {
+				args = append(args, peek())
+				fetch()
 			}
+			parsed, err := Parse(args)
+			if err != nil {
+				return nil, err
+			}
+			expr.Args = parsed
+			expressions = append(expressions, expr)
+			fetch()
 		default:
 			return nil, fmt.Errorf("unexpected token %v", currToken)
 		}

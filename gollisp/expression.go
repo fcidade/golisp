@@ -10,6 +10,8 @@ type Expression interface {
 	// String() string // TODO:
 }
 
+// --
+
 type StringExpr struct {
 	Value string
 }
@@ -24,52 +26,62 @@ func (e *StringExpr) String() string {
 	return e.Value
 }
 
-type Println struct {
-	Args []Expression
+// --
+
+type FnCall struct {
+	Token Token
+	Args  []Expression
 }
 
-var _ Expression = &Println{}
+var _ Expression = &FnCall{}
 
-func (e *Println) Eval() error {
-	fmt.Print("OUTPUT: ")
-	argsAsStr := []string{}
-	for _, arg := range e.Args {
-		argsAsStr = append(argsAsStr, fmt.Sprintf("%s", arg))
-	}
-	fmt.Println(strings.Join(argsAsStr, " "))
-	return nil
-}
+type Fn func(args []Expression) error
 
-func (e *Println) String() string {
-	argsAsStr := []string{}
-	for _, arg := range e.Args {
-		argsAsStr = append(argsAsStr, fmt.Sprintf("%q", arg))
-	}
-	return fmt.Sprintf("(println %s)", strings.Join(argsAsStr, " "))
-}
-
-type Printf struct {
-	Args []Expression
-}
-
-var _ Expression = &Printf{}
-
-func (e *Printf) Eval() error {
-	fmt.Print("OUTPUT: ")
-	args := []any{}
-	if len(e.Args) > 1 {
-		for _, arg := range e.Args[1:] {
-			args = append(args, arg)
+var FnMap = map[string]Fn{
+	"println": func(args []Expression) error {
+		fmt.Print("OUTPUT: ")
+		argsAsStr := []string{}
+		for _, arg := range args {
+			argsAsStr = append(argsAsStr, fmt.Sprintf("%s", arg))
 		}
-	}
-	fmt.Printf(fmt.Sprint(e.Args[0]), args...)
-	return nil
+		fmt.Println(strings.Join(argsAsStr, " "))
+		return nil
+	},
+	"printf": func(args []Expression) error {
+		if len(args) == 0 {
+			return fmt.Errorf("printf: missing format string")
+		}
+		fmt.Print("OUTPUT: ")
+		argsAny := []any{}
+		if len(args) > 1 {
+			for _, arg := range args[1:] {
+				argsAny = append(argsAny, arg)
+			}
+		}
+		fmt.Printf(fmt.Sprint(args[0]), argsAny...)
+		return nil
+	},
 }
 
-func (e *Printf) String() string {
+func (e *FnCall) Eval() error {
+	// fmt.Print("OUTPUT: ")
+	// if e.Token.Literal == "println" {
+	// 	return (&Println{Args: e.Args}).Eval()
+	// }
+	// if e.Token.Literal == "printf" {
+	// 	return (&Printf{Args: e.Args}).Eval()
+	// }
+	fn, ok := FnMap[e.Token.Literal]
+	if !ok {
+		return fmt.Errorf("unknown function %q", e.Token.Literal)
+	}
+	return fn(e.Args)
+}
+
+func (e *FnCall) String() string {
 	argsAsStr := []string{}
 	for _, arg := range e.Args {
 		argsAsStr = append(argsAsStr, fmt.Sprintf("%q", arg))
 	}
-	return fmt.Sprintf("(printf %s)", strings.Join(argsAsStr, " "))
+	return fmt.Sprintf("(%s %s)", e.Token.Literal, strings.Join(argsAsStr, " "))
 }
